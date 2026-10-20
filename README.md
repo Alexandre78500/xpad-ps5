@@ -22,10 +22,12 @@ one thing, wired Xbox pads, and goes all the way:
   `giving up port reset - device vanished`, or as nothing at all.
 - **Stick deadzone tuned on real hardware.** Radial deadzone of 4000/32767, from the rest drift measured on a
   real pad (-2950 on the left vertical axis). Full travel is kept outside the deadzone.
-- **Plays well with the console.** Leaves cleanly before rest mode, removes its virtual pad when it stops, and
-  retries the virtual pad if the console is slow to create it.
-- **Confirmed on a real Microsoft pad:** Xbox One S controller (`045e:02ea`), PS5 Slim, firmware 13.40, menu and
-  games.
+- **Survives rest mode.** The controller is set aside during rest and comes back on wake. The autoload only runs
+  on a full boot, so a payload that quits on rest never returns.
+- **Plays well with the console.** Removes its virtual pad when it stops, never hangs on the way out, and retries
+  the virtual pad if the console is slow to create it.
+- **Confirmed on a real Microsoft pad:** Xbox One S controller (`045e:02ea`), PS5 Slim, firmware 13.40, menu,
+  games, and rest then wake-up.
 
 ## Button layout
 
@@ -59,7 +61,7 @@ PS5_HOST=<console ip> tools/send.sh xpad-ps5.elf --autoload
 ```
 
 This uploads the ELF through Payload Manager's own upload API (`POST /manage:upload`, the same call as its web
-page), appends `local/xpad-ps5` to the autoload list, and starts it. Leave out `--autoload` for a one-off run.
+page), appends its slot (Payload Manager names it `local/xpad`) to the autoload list, and starts it. Leave out `--autoload` for a one-off run.
 You can also upload `xpad-ps5.elf` from Payload Manager's page by hand.
 
 ### With any ELF loader
@@ -71,12 +73,16 @@ console asks **"Who is using this controller?"**: pick a user or Guest, like for
 
 ## On the console
 
-- Log: `/data/xpad-ps5/xpad-ps5.log`, and read-only at `http://<console ip>:8096/`. The port also acts as a lock,
+- Log: `/data/xpad-ps5/xpad-ps5.log`, and read-only at `http://<console ip>:8096/` (latest lines). The port also acts as a lock,
   so only one instance runs at a time. The page is open to your local network (like Payload Manager's), so it
   only shows the payload's own messages and leaves out any line that mentions a user: the raw kernel log and the
   console's user ids stay in the file on the console. It accepts no commands.
 - The controller is looked for every second.
-- To stop it: rest mode, `SIGTERM` (Payload Manager's process list), or create `/data/xpad-ps5/stop`.
+- **Rest mode:** the controller is set aside during rest and picked up again on wake, without restarting
+  anything. Payload Manager's autoload only runs on a full boot, so a payload that quit on rest would not come
+  back (1.0.x did that).
+- To stop it: `SIGTERM` (Payload Manager's process list) or create `/data/xpad-ps5/stop`. Stopping takes 10 seconds
+  at most.
 - To choose the user: by default the virtual pad goes to the user who started the console, otherwise the user in
   the foreground. Put `other` (another signed-in user) or a hexadecimal user id in `/data/xpad-ps5/bind_user` to
   change that.

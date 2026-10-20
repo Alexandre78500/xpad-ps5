@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "weblog.h"
 
+#include "anypad/log.h"
+
 #include <string.h>
 
 /* The page is reachable from the LAN, so it works from an allowlist: only
@@ -11,7 +13,7 @@
 static const char *const k_shown[] = {
     "xpad-ps5 ", "usb: ", "usb seen: ", "usbd: ", "pad: ", "dev: ", "klog| ",
     "klog: local server", "klog: /dev/klog ", "klog: released",
-    "vpad: unavailable", "vpad: trying again", "stopping: ", "stopped",
+    "vpad: unavailable", "vpad: trying again", "stopping: ", "stopped", "rest: ", "wake: ",
 };
 
 static int mentions_user(const char *p)
@@ -54,5 +56,34 @@ void web_filter(const char *in, char *out, size_t n)
             out[used] = 0;
         }
         in += len;
+    }
+}
+
+void web_page(char *out, size_t n)
+{
+    unsigned long seq = log_seq(), from = seq > 600 ? seq - 600 : 0;
+    size_t used = 0;
+
+    if (n == 0) return;
+    out[0] = 0;
+    while (from < seq) {
+        char chunk[512], shown[512];
+        unsigned long next = log_since(from, chunk, sizeof chunk);
+        size_t len;
+
+        if (next <= from) break;                /* a line that does not fit: stop */
+        from = next;
+        web_filter(chunk, shown, sizeof shown);
+        len = strlen(shown);
+        if (len + 1 > n) continue;
+        while (used + len + 1 > n) {            /* make room: the oldest lines go */
+            char *nl = memchr(out, '\n', used);
+            size_t drop = nl ? (size_t)(nl - out) + 1 : used;
+            memmove(out, out + drop, used - drop);
+            used -= drop;
+        }
+        memcpy(out + used, shown, len);
+        used += len;
+        out[used] = 0;
     }
 }

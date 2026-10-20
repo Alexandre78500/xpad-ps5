@@ -7,19 +7,27 @@ ELF=${1:?usage: PS5_HOST=<ip> $0 <elf> [--autoload]}
 HOST=${PS5_HOST:?set PS5_HOST to the console address}
 B=http://$HOST:8084
 NAME=$(basename "$ELF")
-SLOT=local/${NAME%.elf}
 
-# A running xpad-ps5 answers on :8096; stop it first (refuses if it cannot tell which process it is).
-if curl -s -m5 "http://$HOST:8096/" | grep xpad-ps5 >/dev/null; then
+# A running xpad-ps5 holds port 8096 (its lock) and shows up as the one payload.elf; stop it first and wait
+# until the process is really gone. Refuses if it cannot tell which process it is.
+if nc -z -w 3 "$HOST" 8096 2>/dev/null; then
   PIDS=$(curl -s -m10 "$B/processes_list" | python3 -c 'import json,sys; [print(p["pid"]) for p in json.load(sys.stdin)["processes"] if p["name"]=="payload.elf"]')
-  if [ "$(echo $PIDS | wc -w)" -ne 1 ]; then echo "several payload.elf running: stop xpad-ps5 by hand"; exit 1; fi
+  if [ "$(echo $PIDS | wc -w)" -ne 1 ]; then echo "port 8096 busy and not exactly one payload.elf: stop xpad-ps5 by hand"; exit 1; fi
   curl -s -m10 -X POST -H "Origin: $B" "$B/process_kill?pid=$PIDS"; echo
-  sleep 2
+  for _ in $(seq 15); do
+    curl -s -m10 "$B/processes_list" | grep -q "\"pid\":$PIDS," || break
+    sleep 1
+  done
+  if curl -s -m10 "$B/processes_list" | grep -q "\"pid\":$PIDS,"; then echo "the old instance ($PIDS) does not stop"; exit 1; fi
 fi
 
 # Payload Manager checks the Origin header on every change.
 curl -fsS -m60 -X POST -H "Origin: $B" -H 'Content-Type: application/octet-stream' \
-  --data-binary @"$ELF" "$B/manage:upload?filename=$NAME&mode=replace"; echo " uploaded as $SLOT"
+  --data-binary @"$ELF" "$B/manage:upload?filename=$NAME&mode=replace"; echo " uploaded"
+# Payload Manager picks the slot name itself (xpad-ps5.elf lands in local/xpad): read it back.
+SLOT=$(curl -fsS -m10 "$B/list_payloads" | NAME="$NAME" python3 -c 'import json,os,sys; n=os.environ["NAME"]; print(next((i["slot"] for i in json.load(sys.stdin)["items"] if i["path"].endswith("/"+n)), ""))')
+if [ -z "$SLOT" ]; then echo "uploaded, but Payload Manager does not list $NAME"; exit 1; fi
+echo "slot: $SLOT"
 
 if [ "${2:-}" = "--autoload" ]; then
   LIST=$(curl -fsS -m10 "$B/get_config" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("AUTOLOAD_LIST",""))')

@@ -11,7 +11,8 @@
  * /data/xpad-ps5/xpad-ps5.log and, read-only, at http://<console>:8096/
  * (the port doubles as a lock: one instance at a time).
  *
- * Stops on rest mode, SIGTERM/SIGINT, or the file /data/xpad-ps5/stop.
+ * Rest mode: the controller is set aside, then picked up on wake (src/rest.c).
+ * Stops on SIGTERM/SIGINT, or the file /data/xpad-ps5/stop.
  * On the way out it removes its virtual DualSense and gives its rights back.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -22,6 +23,7 @@
 #include "anypad/ps5_vpad.h"
 #include "anypad/util.h"
 #include "gip.h"
+#include "rest.h"
 #include "weblog.h"
 
 #include <sys/ioctl.h>
@@ -42,7 +44,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define VERSION     "1.0.2"
+#define VERSION     "1.1.0"
 #define STATE_DIR   "/data/xpad-ps5"
 #define LOG_PATH    STATE_DIR "/xpad-ps5.log"
 #define STOP_FLAG   STATE_DIR "/stop"
@@ -383,7 +385,7 @@ static int web_open(void)
 
 static void web_poll(void)
 {
-    static char raw[64 * 1024], body[64 * 1024];
+    static char body[64 * 1024];
     char head[160];
     int c;
 
@@ -395,8 +397,7 @@ static void web_poll(void)
         setsockopt(c, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
         setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
         (void)!read(c, req, sizeof req);        /* the request is ignored: there is one page */
-        log_since(0, raw, sizeof raw);
-        web_filter(raw, body, sizeof body);
+        web_page(body, sizeof body);
         hl = snprintf(head, sizeof head,
                       "HTTP/1.0 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n"
                       "Content-Length: %zu\r\nConnection: close\r\n\r\n", strlen(body));
@@ -603,10 +604,20 @@ static void on_signal(int sig)
     g_stop = 1;
 }
 
+/* Stopping must never hang: an instance that does not finish exiting stays in
+ * the process list next to the following one (seen on 2026-10-20). Past
+ * T_STOP_MAX_S, leave at once; the kernel frees the USB transfers. */
+#define T_STOP_MAX_S 10
+static void on_stop_timeout(int sig)
+{
+    (void)sig;
+    _exit(0);
+}
+
 int main(void)
 {
     long last_scan = -100000, last_power = 0, last_send = 0, last_flag = 0, last_retry = 0;
-    int scans = 0, was_live = 0, vpad_ok;
+    int scans = 0, was_live = 0, vpad_ok, asleep = 0;
     pad_state ps;
     const char *why = "stop requested";
 
@@ -639,6 +650,28 @@ int main(void)
 
         web_poll();
         klog_poll(now);
+
+        /* Rest: the controller is set aside (USB closed, virtual DualSense
+         * removed), then looked for again on wake. */
+        if (now - last_power >= 200) {
+            last_power = now;
+            switch (rest_transition(&asleep, power_state())) {
+            case REST_SLEEP:
+                log_line("rest: controller set aside until wake-up");
+                if (vpad_ok) vpad_remove(0);
+                x_close(&g_x);
+                was_live = 0;
+                break;
+            case REST_WAKE:
+                log_line("wake: looking for the controller");
+                last_scan = -100000;
+                break;
+            }
+        }
+        if (asleep) {
+            usleep(200000);
+            continue;
+        }
         if (vpad_ok) vpad_poll(now);
 
         if (g_x.fd < 0) {
@@ -689,14 +722,6 @@ int main(void)
             usleep(changed ? 500 : 2000);
         }
 
-        if (now - last_power >= 200) {
-            int p = power_state();
-            last_power = now;
-            if (p == POWER_GOING_TO_REST || p == POWER_IN_REST) {
-                why = "rest mode";
-                break;
-            }
-        }
         if (now - last_flag >= 1000) {
             last_flag = now;
             if (access(STOP_FLAG, F_OK) == 0) {
@@ -708,6 +733,8 @@ int main(void)
     }
 
     log_line("stopping: %s", why);
+    signal(SIGALRM, on_stop_timeout);
+    alarm(T_STOP_MAX_S);
     klog_close();
     if (vpad_ok) vpad_remove(0);
     x_close(&g_x);
@@ -716,5 +743,5 @@ int main(void)
     log_line("stopped");
     log_close();
     notify("xpad-ps5: stopped (%s)", why);
-    return 0;
+    _exit(0);                           /* skip the system libraries' destructors */
 }
