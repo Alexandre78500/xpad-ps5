@@ -8,7 +8,7 @@ OBJD  := build/ps5
 CFLAGS := -std=c11 -Wall -Wextra -Werror -O2 -Isrc -Isrc/anypad
 LDLIBS += -lScePad -lSceUserService -lSceSystemService -ldl
 
-SRCS := src/main.c src/gip.c src/anypad/ps5_vpad.c src/anypad/log.c src/anypad/util.c src/anypad/ps5_power.c
+SRCS := src/main.c src/gip.c src/weblog.c src/anypad/ps5_vpad.c src/anypad/log.c src/anypad/util.c src/anypad/ps5_power.c
 OBJS := $(patsubst src/%.c,$(OBJD)/%.o,$(SRCS))
 
 $(ELF): $(OBJS)

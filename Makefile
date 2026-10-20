@@ -12,8 +12,13 @@ $(BUILD)/test_gip: src/gip.c tests/test_gip.c src/gip.h src/anypad/pad.h
 	@mkdir -p $(BUILD)
 	cc -std=c11 -Wall -Wextra -Werror -O1 -g -Isrc -o $@ src/gip.c tests/test_gip.c -lm
 
-test: $(BUILD)/test_gip
+$(BUILD)/test_weblog: src/weblog.c tests/test_weblog.c src/weblog.h
+	@mkdir -p $(BUILD)
+	cc -std=c11 -Wall -Wextra -Werror -O1 -g -Isrc -o $@ src/weblog.c tests/test_weblog.c
+
+test: $(BUILD)/test_gip $(BUILD)/test_weblog
 	./$(BUILD)/test_gip
+	./$(BUILD)/test_weblog
 
 ps5:
 	$(MAKE) -f ps5.mk

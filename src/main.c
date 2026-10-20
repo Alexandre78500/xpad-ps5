@@ -22,6 +22,7 @@
 #include "anypad/ps5_vpad.h"
 #include "anypad/util.h"
 #include "gip.h"
+#include "weblog.h"
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -41,7 +42,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define VERSION     "1.0.0"
+#define VERSION     "1.0.1"
 #define STATE_DIR   "/data/xpad-ps5"
 #define LOG_PATH    STATE_DIR "/xpad-ps5.log"
 #define STOP_FLAG   STATE_DIR "/stop"
@@ -382,7 +383,7 @@ static int web_open(void)
 
 static void web_poll(void)
 {
-    static char body[64 * 1024];
+    static char raw[64 * 1024], body[64 * 1024];
     char head[160];
     int c;
 
@@ -394,7 +395,8 @@ static void web_poll(void)
         setsockopt(c, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
         setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
         (void)!read(c, req, sizeof req);        /* the request is ignored: there is one page */
-        log_since(0, body, sizeof body);
+        log_since(0, raw, sizeof raw);
+        web_filter(raw, body, sizeof body);
         hl = snprintf(head, sizeof head,
                       "HTTP/1.0 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n"
                       "Content-Length: %zu\r\nConnection: close\r\n\r\n", strlen(body));
