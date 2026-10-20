@@ -1,0 +1,10 @@
+name: test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
