@@ -14,7 +14,7 @@ $(BUILD)/test_gip: src/gip.c tests/test_gip.c src/gip.h src/anypad/pad.h
 
 $(BUILD)/test_weblog: src/weblog.c tests/test_weblog.c src/weblog.h src/anypad/log.c src/anypad/util.c
 	@mkdir -p $(BUILD)
-	cc -std=c11 -Wall -Wextra -Werror -O1 -g -Isrc -o $@ src/weblog.c src/anypad/log.c src/anypad/util.c tests/test_weblog.c
+	cc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -O1 -g -Isrc -o $@ src/weblog.c src/anypad/log.c src/anypad/util.c tests/test_weblog.c
 
 $(BUILD)/test_rest: src/rest.c tests/test_rest.c src/rest.h src/anypad/ps5_power.h
 	@mkdir -p $(BUILD)
