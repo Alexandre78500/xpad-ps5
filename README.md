@@ -73,8 +73,8 @@ console asks **"Who is using this controller?"**: pick a user or Guest, like for
 
 - Log: `/data/xpad-ps5/xpad-ps5.log`, and read-only at `http://<console ip>:8096/`. The port also acts as a lock,
   so only one instance runs at a time. The page is open to your local network (like Payload Manager's), so it
-  leaves out the raw kernel log and the console's user ids: those stay in the file on the console. It accepts no
-  commands.
+  only shows the payload's own messages and leaves out any line that mentions a user: the raw kernel log and the
+  console's user ids stay in the file on the console. It accepts no commands.
 - The controller is looked for every second.
 - To stop it: rest mode, `SIGTERM` (Payload Manager's process list), or create `/data/xpad-ps5/stop`.
 - To choose the user: by default the virtual pad goes to the user who started the console, otherwise the user in

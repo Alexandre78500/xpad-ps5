@@ -42,7 +42,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define VERSION     "1.0.1"
+#define VERSION     "1.0.2"
 #define STATE_DIR   "/data/xpad-ps5"
 #define LOG_PATH    STATE_DIR "/xpad-ps5.log"
 #define STOP_FLAG   STATE_DIR "/stop"

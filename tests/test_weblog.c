@@ -17,7 +17,11 @@ int main(void)
         "[    103] klog| ugen1.2: <Microsoft, Controller> at usbus1\n"
         "[    104] klog: <118>#LOGIN MGR# [Assign] DeviceId:0x5030d / UserId:0x113a1065\n"
         "[    105] slot 0: device 0x5030d bound to user 0x113a1065: 0\n"
-        "[    106] pad: virtual DualSense ready\n";
+        "[    106] pad: virtual DualSense ready\n"
+        "[    107] vpad: scePadOpen of the user's pad (user 0x113a1065): 0x0\n"
+        "[    108] klog| <118>[LoginMgr] eventType=DeviceAdded / UserId=0x113a1065\n"
+        "[    109] something new that nobody vetted 0xdeadbeef\n"
+        "[    110] klog: released\n";
     char out[1024], tiny[40];
 
     web_filter(log, out, sizeof out);
@@ -26,14 +30,19 @@ int main(void)
     CHECK(strstr(out, "virtual DualSense ready") != NULL);
     CHECK(strstr(out, "0x113a1065") == NULL);
     CHECK(strstr(out, "LOGIN MGR") == NULL);
+    CHECK(strstr(out, "LoginMgr") == NULL);
+    CHECK(strstr(out, "nobody vetted") == NULL);     /* unknown messages stay off the page */
+    CHECK(strstr(out, "klog: released") != NULL);
 
     web_filter(log, tiny, sizeof tiny);             /* too small: whole lines only, terminated */
     CHECK(strlen(tiny) < sizeof tiny);
     CHECK(strstr(tiny, "0x113a1065") == NULL);
 
-    CHECK(web_private("no bracket") == 0);
-    CHECK(web_private("ends]") == 0);
+    CHECK(web_private("no bracket") == 1);
+    CHECK(web_private("ends]") == 1);
     CHECK(web_private("[1]users: x") == 1);
+    CHECK(web_private("[1] usb: /dev/ugen1.2 045e:02ea") == 0);
+    CHECK(web_private("[1] usb: held by USER 3") == 1);
     if (g_fail) {
         printf("test_weblog: %d failure(s)\n", g_fail);
         return 1;
